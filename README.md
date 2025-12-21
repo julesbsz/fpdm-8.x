@@ -1,5 +1,18 @@
 # PDF Form Filling with FPDM
 
+> **🔀 Fork Notice**
+> 
+> This is a **PHP 8.5 compatible fork** of [codeshell/fpdm](https://github.com/codeshell/fpdm).
+> 
+> **Changes in this fork:**
+> - Full PHP 8.5 compatibility
+> - Replaced deprecated `create_function()` with closures
+> - Fixed curly brace string access syntax (`$str{0}` → `$str[0]`)
+> - Fixed deprecated `implode()` parameter order
+> - Added missing class property declarations
+> - Removed legacy PHP 4/5 compatibility code
+> - Updated minimum PHP requirement to 8.0+
+
 ## Package
 
 The FPDM class allows to fill out PDF forms, i.e. populate fields of a PDF file. It is **developed by Olivier Plathey**, author of the [FDPF Library](http://www.fpdf.org/), and has been released as [Skript 93](http://www.fpdf.org/en/script/script93.php).
