@@ -48,12 +48,12 @@ $FPDM_REGEXPS= array(
 //Major stream filters come from FPDI's stuff but I've added some :)
 if (!defined('FPDM_DIRECT')) {
 	$FPDM_FILTERS = array("LZWDecode", "ASCIIHexDecode", "ASCII85Decode", "FlateDecode", "Standard"	);
+	require_once(__DIR__ . "/filters/FilterASCIIHex.php");
+	require_once(__DIR__ . "/filters/FilterASCII85.php");
+	require_once(__DIR__ . "/filters/FilterFlate.php");
+	require_once(__DIR__ . "/filters/FilterLZW.php");
+	require_once(__DIR__ . "/filters/FilterStandard.php");
 }
-// require_once("filters/FilterASCIIHex.php");
-// require_once("filters/FilterASCII85.php");
-// require_once("filters/FilterFlate.php");
-// require_once("filters/FilterLZW.php");
-// require_once("filters/FilterStandard.php");
 
 
 if (!class_exists('FPDM', false)) {
@@ -111,6 +111,7 @@ if (!class_exists('FPDM', false)) {
 
 		var $needAppearancesTrue = false;	//boolean, indicates if /NeedAppearances is already set to true
 		var $isUTF8 = false;				//boolean (true for UTF-8, false for ISO-8859-1)
+		var $n = 0;							//integer, Position counter for objects
 		
         /**
          * Constructor
