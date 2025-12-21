@@ -4,8 +4,7 @@
 //  NOTE: requires ZLIB >= 1.0.9!
 //
 
-$__tmp = version_compare(phpversion(), "5") == -1 ? array('FilterFlateDecode') : array('FilterFlateDecode', false);
-if (!call_user_func_array('class_exists', $__tmp)) {
+if (!class_exists('FilterFlate', false)) {
 
 
 	if(isset($FPDM_FILTERS)) array_push($FPDM_FILTERS,"FlateDecode");

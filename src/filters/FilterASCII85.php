@@ -26,8 +26,7 @@ if (!defined('ORD_u'))
 if (!defined('ORD_tilde'))
 	define('ORD_tilde', ord('~'));
 
-$__tmp = version_compare(phpversion(), "5") == -1 ? array('FilterASCII85') : array('FilterASCII85', false);
-if (!call_user_func_array('class_exists', $__tmp)) {
+if (!class_exists('FilterASCII85', false)) {
 
 
 	if(isset($FPDM_FILTERS)) array_push($FPDM_FILTERS,"ASCII85Decode");
@@ -104,5 +103,3 @@ if (!call_user_func_array('class_exists', $__tmp)) {
         }
     }
 }
-
-unset($__tmp);

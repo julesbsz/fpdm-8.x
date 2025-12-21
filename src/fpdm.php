@@ -48,16 +48,15 @@ $FPDM_REGEXPS= array(
 //Major stream filters come from FPDI's stuff but I've added some :)
 if (!defined('FPDM_DIRECT')) {
 	$FPDM_FILTERS = array("LZWDecode", "ASCIIHexDecode", "ASCII85Decode", "FlateDecode", "Standard"	);
+	require_once(__DIR__ . "/filters/FilterASCIIHex.php");
+	require_once(__DIR__ . "/filters/FilterASCII85.php");
+	require_once(__DIR__ . "/filters/FilterFlate.php");
+	require_once(__DIR__ . "/filters/FilterLZW.php");
+	require_once(__DIR__ . "/filters/FilterStandard.php");
 }
-// require_once("filters/FilterASCIIHex.php");
-// require_once("filters/FilterASCII85.php");
-// require_once("filters/FilterFlate.php");
-// require_once("filters/FilterLZW.php");
-// require_once("filters/FilterStandard.php");
 
 
-$__tmp = version_compare(phpversion(), "5") == -1 ? array('FPDM') : array('FPDM', false);
-if (!call_user_func_array('class_exists', $__tmp)) {
+if (!class_exists('FPDM', false)) {
     
 	
 	define('FPDM_VERSION',2.9); 
@@ -112,6 +111,7 @@ if (!call_user_func_array('class_exists', $__tmp)) {
 
 		var $needAppearancesTrue = false;	//boolean, indicates if /NeedAppearances is already set to true
 		var $isUTF8 = false;				//boolean (true for UTF-8, false for ISO-8859-1)
+		var $n = 0;							//integer, Position counter for objects
 		
         /**
          * Constructor
@@ -790,16 +790,16 @@ if (!call_user_func_array('class_exists', $__tmp)) {
 		
 			$OldLen=strlen($CurLine);
 			
-			//My PHP4/5 static call hack, only to make the callback $this->replace_value($matches,"$value") possible!
-			$callback_code='$THIS=new FPDM("[_STATIC_]");return $THIS->replace_value($matches,"'.$value.'");';
-			
 			$field_regexp='/^\/(\w+)\s?(\<|\()([^\)\>]*)(\)|\>)/';
 			
 			if(preg_match($field_regexp,$CurLine)) {
 				//modify it according to the new value $value
+				$self = $this;
 				$CurLine = preg_replace_callback(
 					$field_regexp,
-					create_function('$matches',$callback_code),
+					function($matches) use ($self, $value) {
+						return $self->replace_value($matches, $value);
+					},
 					$CurLine
 				);
 			}else {
@@ -1114,7 +1114,7 @@ if (!call_user_func_array('class_exists', $__tmp)) {
 		*Encodes a binary string to its hexadecimal representation
 		*
 		*@access private
-		*@internal  dechex(ord($str{$i})); is buggy because for hex value of 0-15 heading 0 is missing! Using sprintf() to get it right.
+		*@internal  dechex(ord($str[$i])); is buggy because for hex value of 0-15 heading 0 is missing! Using sprintf() to get it right.
 		*@param string $str a binary string
 		*@return string $hex the hexified string
 		**/
@@ -1577,7 +1577,7 @@ if (!call_user_func_array('class_exists', $__tmp)) {
         //---------------------------------------
 			$chunks=preg_split("/(\s*Td\s+[\<\(])([^\>\)]+)([\>\)]\s+Tj)/",$stream,0,PREG_SPLIT_DELIM_CAPTURE);
 			$chunks[2]=$value;
-			$stream=implode($chunks,'');
+			$stream=implode('', $chunks);
 			return $stream;
         }
         
@@ -2229,5 +2229,3 @@ if (!call_user_func_array('class_exists', $__tmp)) {
 	}
 	
 }
-
-unset($__tmp);
