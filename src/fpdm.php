@@ -56,8 +56,7 @@ if (!defined('FPDM_DIRECT')) {
 // require_once("filters/FilterStandard.php");
 
 
-$__tmp = version_compare(phpversion(), "5") == -1 ? array('FPDM') : array('FPDM', false);
-if (!call_user_func_array('class_exists', $__tmp)) {
+if (!class_exists('FPDM', false)) {
     
 	
 	define('FPDM_VERSION',2.9); 
@@ -790,16 +789,16 @@ if (!call_user_func_array('class_exists', $__tmp)) {
 		
 			$OldLen=strlen($CurLine);
 			
-			//My PHP4/5 static call hack, only to make the callback $this->replace_value($matches,"$value") possible!
-			$callback_code='$THIS=new FPDM("[_STATIC_]");return $THIS->replace_value($matches,"'.$value.'");';
-			
 			$field_regexp='/^\/(\w+)\s?(\<|\()([^\)\>]*)(\)|\>)/';
 			
 			if(preg_match($field_regexp,$CurLine)) {
 				//modify it according to the new value $value
+				$self = $this;
 				$CurLine = preg_replace_callback(
 					$field_regexp,
-					create_function('$matches',$callback_code),
+					function($matches) use ($self, $value) {
+						return $self->replace_value($matches, $value);
+					},
 					$CurLine
 				);
 			}else {
@@ -1114,7 +1113,7 @@ if (!call_user_func_array('class_exists', $__tmp)) {
 		*Encodes a binary string to its hexadecimal representation
 		*
 		*@access private
-		*@internal  dechex(ord($str{$i})); is buggy because for hex value of 0-15 heading 0 is missing! Using sprintf() to get it right.
+		*@internal  dechex(ord($str[$i])); is buggy because for hex value of 0-15 heading 0 is missing! Using sprintf() to get it right.
 		*@param string $str a binary string
 		*@return string $hex the hexified string
 		**/
@@ -2229,5 +2228,3 @@ if (!call_user_func_array('class_exists', $__tmp)) {
 	}
 	
 }
-
-unset($__tmp);

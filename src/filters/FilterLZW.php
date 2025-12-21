@@ -17,8 +17,7 @@
 //  limitations under the License.
 //
 
-$__tmp = version_compare(phpversion(), "5") == -1 ? array('FilterLZW') : array('FilterLZW', false);
-if (!call_user_func_array('class_exists', $__tmp)) {
+if (!class_exists('FilterLZW', false)) {
 
 	if(isset($FPDM_FILTERS)) array_push($FPDM_FILTERS,"LZWDecode");
 
@@ -158,5 +157,3 @@ if (!call_user_func_array('class_exists', $__tmp)) {
         }
     }
 }
-
-unset($__tmp);

@@ -15,8 +15,7 @@
 	******************************************************************/
 
 	if (!defined('URL_TOOLBOX')) die("Requires the URL_TOOLBOX package!");
-		
-	define("PHP5_ENGINE",version_compare(phpversion(), "5"));
+
  
 	//!NOTE try to detect your OS
 	
@@ -104,22 +103,12 @@
 
 			//echo htmlentities("$cmdline , $descriptorspec, $cwd, $env");
 
-			if(PHP5_ENGINE) { // Php5
-				$process = proc_open($cmdline, $descriptorspec, $pipes, $cwd, $env);
-			}else { //Php4
-				$process = proc_open($cmdline, $descriptorspec, $pipes);
-			}
+			$process = proc_open($cmdline, $descriptorspec, $pipes, $cwd, $env);
 
 			if (is_resource($process)) {
 
-				if(PHP5_ENGINE) { 
-					$err=stream_get_contents($pipes[2]);
-				}else { //Php4
-					$err= "";
-					while (($str = fgets($pipes[2], 4096))) {
-						$err.= "$str\n";
-					}
-				}
+				$err=stream_get_contents($pipes[2]);
+
 
 				fclose($pipes[2]);
 				
