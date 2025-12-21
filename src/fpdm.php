@@ -1576,7 +1576,7 @@ if (!class_exists('FPDM', false)) {
         //---------------------------------------
 			$chunks=preg_split("/(\s*Td\s+[\<\(])([^\>\)]+)([\>\)]\s+Tj)/",$stream,0,PREG_SPLIT_DELIM_CAPTURE);
 			$chunks[2]=$value;
-			$stream=implode($chunks,'');
+			$stream=implode('', $chunks);
 			return $stream;
         }
         
