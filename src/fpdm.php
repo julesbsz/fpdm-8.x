@@ -91,6 +91,7 @@ if (!class_exists('FPDM', false)) {
 		
 		var $streams = '';         //Holds streams configuration found during parsing
 		var $streams_filter = '';  //Regexp to decode filter streams
+		var $ap_objects = array(); //Maps object IDs to their checkbox state names for indirect /AP references
 		
 		var $safe_mode = false;       //boolean, if set, ignore previous offsets do no calculations for the new xref table, seek pos directly in file
 		var $check_mode = false;      //boolean, Use this to track offset calculations errors in corrupteds pdfs files for sample
@@ -981,6 +982,105 @@ if (!class_exists('FPDM', false)) {
             }
             return $offset_shift;
         }
+        
+        /**
+         * Resolves checkbox state names from an indirect /AP reference
+         * Looks up the referenced object and extracts state names from /N dictionary
+         *
+         * @param int $ap_ref_id The object ID referenced by /AP
+         * @return array|false Array with 'yes' and 'no' state names, or false if not found
+         */
+        private function resolveIndirectAP($ap_ref_id) {
+            // Check if already resolved
+            if (isset($this->ap_objects[$ap_ref_id])) {
+                return $this->ap_objects[$ap_ref_id];
+            }
+            
+            $verbose_parsing = ($this->verbose && ($this->verbose_level > 3));
+            $entries = &$this->pdf_entries;
+            $countLines = count($entries);
+            
+            // Find the AP object (e.g., "101 0 obj")
+            $ap_obj_pattern = "/^" . $ap_ref_id . " 0 obj/";
+            $n_ref_id = 0;
+            
+            for ($i = 0; $i < $countLines; $i++) {
+                if (preg_match($ap_obj_pattern, $entries[$i])) {
+                    if ($verbose_parsing) {
+                        echo "<br>Found AP object $ap_ref_id at line $i";
+                    }
+                    // Look for /N reference within this object (next few lines)
+                    for ($j = $i + 1; $j < min($i + 10, $countLines); $j++) {
+                        if (preg_match("/^\\/N\\s+(\\d+)\\s+0\\s+R/", $entries[$j], $match)) {
+                            $n_ref_id = intval($match[1]);
+                            if ($verbose_parsing) {
+                                echo "<br>Found /N reference to object $n_ref_id";
+                            }
+                            break;
+                        }
+                        if (preg_match("/^endobj/", $entries[$j])) {
+                            break; // End of object, /N not found
+                        }
+                    }
+                    break;
+                }
+            }
+            
+            if (!$n_ref_id) {
+                if ($verbose_parsing) {
+                    echo "<br>Could not find /N reference in AP object $ap_ref_id";
+                }
+                return false;
+            }
+            
+            // Find the N object (contains the state names)
+            $n_obj_pattern = "/^" . $n_ref_id . " 0 obj/";
+            $state_yes = '';
+            $state_no = '';
+            
+            for ($i = 0; $i < $countLines; $i++) {
+                if (preg_match($n_obj_pattern, $entries[$i])) {
+                    if ($verbose_parsing) {
+                        echo "<br>Found N object $n_ref_id at line $i";
+                    }
+                    // Look for state names within this object (next few lines)
+                    for ($j = $i + 1; $j < min($i + 10, $countLines); $j++) {
+                        // Match state names like "/Oui 137 0 R" or "/Off 138 0 R" or "/Yes 5 0 R"
+                        if (preg_match("/^\\/(\\w+)\\s+\\d+\\s+0\\s+R/", $entries[$j], $match)) {
+                            $state_name = $match[1];
+                            // "Off" is typically the unchecked state
+                            if (strtolower($state_name) === 'off') {
+                                $state_no = $state_name;
+                            } else {
+                                // Any other state is considered the "checked" state
+                                $state_yes = $state_name;
+                            }
+                            if ($verbose_parsing) {
+                                echo "<br>Found state name: $state_name";
+                            }
+                        }
+                        if (preg_match("/^endobj/", $entries[$j]) || preg_match("/^>>/", $entries[$j])) {
+                            break; // End of object
+                        }
+                    }
+                    break;
+                }
+            }
+            
+            if ($state_yes && $state_no) {
+                $result = array('yes' => $state_yes, 'no' => $state_no);
+                $this->ap_objects[$ap_ref_id] = $result;
+                if ($verbose_parsing) {
+                    echo "<br>Resolved AP $ap_ref_id: yes='$state_yes', no='$state_no'";
+                }
+                return $result;
+            }
+            
+            if ($verbose_parsing) {
+                echo "<br>Could not resolve checkbox states for AP object $ap_ref_id (yes='$state_yes', no='$state_no')";
+            }
+            return false;
+        }
         //ENDFIX
 		
 		/**
@@ -1851,6 +1951,25 @@ if (!class_exists('FPDM', false)) {
                                                 echo("<br>Found AP Line '<i>$Counter</i>'");
                                             }
                                             $ap_line = $Counter;
+                                            
+                                            // Check if this is an indirect reference (e.g., /AP 101 0 R)
+                                            if (preg_match("/^\\/AP\\s+(\\d+)\\s+0\\s+R/", $CurLine, $ap_match)) {
+                                                $ap_ref_id = intval($ap_match[1]);
+                                                if ($verbose_parsing) {
+                                                    echo("<br>Found indirect AP reference to object $ap_ref_id");
+                                                }
+                                                // Resolve the indirect reference to get checkbox state names
+                                                $resolved = $this->resolveIndirectAP($ap_ref_id);
+                                                if ($resolved) {
+                                                    $ap_d_yes = $resolved['yes'];
+                                                    $ap_d_no = $resolved['no'];
+                                                    $object["infos"]["checkbox_yes"] = $ap_d_yes;
+                                                    $object["infos"]["checkbox_no"] = $ap_d_no;
+                                                    if ($verbose_parsing) {
+                                                        echo("<br>Resolved checkbox states: yes='$ap_d_yes', no='$ap_d_no'");
+                                                    }
+                                                }
+                                            }
                                         } elseif (!$ap_d_line && '/D' == substr($CurLine, 0, 2)) {
                                             if ($verbose_parsing) {
                                                 echo("<br>Found D Line '<i>$Counter</i>'");
