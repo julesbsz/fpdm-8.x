@@ -358,11 +358,164 @@ if (!class_exists('FPDM', false)) {
 		}
 		/**
 		*Activates the flatten output to remove form from pdf file keeping field datas.
+		*@note Now supports native flattening without pdftk
 		**/
 		function Flatten() {
 		//-----------------
 			$this->set_modes('flatten',true); 
-			$this->support="pdftk";
+			// Native support is maintained - no longer forces pdftk
+		}
+		
+		/**
+		*Flattens all form fields by making them read-only
+		*
+		*@access private
+		*@note This is called after values have been merged to make fields non-editable
+		*@note This approach sets the ReadOnly flag (Ff bit 1) on all fields to prevent editing
+		*       while preserving the field structure needed for value rendering
+		**/
+		function flattenFields() {
+		//------------------------
+			$entries = &$this->pdf_entries;
+			$countLines = count($entries);
+			$verbose_flatten = ($this->verbose && ($this->verbose_level > 1));
+			
+			if($verbose_flatten) $this->dumpContent("Starting native flatten process", "Flatten");
+			
+			$in_widget = false;
+			$current_obj = 0;
+			$widget_start_line = 0;
+			$ff_found = false;
+			$modified_count = 0;
+			$widgets_to_add_ff = array(); // Widgets that don't have /Ff line
+			
+			// First pass: Find all widgets and set read-only flag
+			for ($i = 0; $i < $countLines; $i++) {
+				$line = $entries[$i];
+				
+				// Track object boundaries
+				if (preg_match("/^(\d+) (\d+) obj/", $line, $match)) {
+					// If we were in a widget that had no /Ff, remember to add it
+					if ($in_widget && !$ff_found && $widget_start_line > 0) {
+						$widgets_to_add_ff[] = $widget_start_line;
+					}
+					$current_obj = intval($match[1]);
+					$in_widget = false;
+					$ff_found = false;
+					$widget_start_line = 0;
+				}
+				
+				// Detect Widget subtype (form field annotation)
+				if (preg_match("/\/Subtype\s*\/Widget/", $line)) {
+					$in_widget = true;
+					$widget_start_line = $i;
+					if($verbose_flatten) $this->dumpContent("Found Widget annotation in object $current_obj at line $i", "Flatten");
+				}
+				
+				// Inside a widget - modify field flags for flattening
+				if ($in_widget && $current_obj > 0) {
+					// Set read-only flag (Ff bit 1 = ReadOnly)
+					if (preg_match("/^\/Ff\s+(\d+)/", $line, $match)) {
+						$ff_found = true;
+						$old_len = strlen($line);
+						$flags = intval($match[1]) | 1; // Set bit 1 (ReadOnly)
+						$entries[$i] = '/Ff ' . $flags;
+						$this->shift += strlen($entries[$i]) - $old_len;
+						$modified_count++;
+						if($verbose_flatten) $this->dumpContent("Set read-only flag at line $i (flags=$flags)", "Flatten");
+					}
+				}
+				
+				// End of object - check if we need to add /Ff
+				if (preg_match("/^endobj/", $line)) {
+					if ($in_widget && !$ff_found && $widget_start_line > 0) {
+						$widgets_to_add_ff[] = $widget_start_line;
+					}
+					$in_widget = false;
+					$current_obj = 0;
+					$ff_found = false;
+				}
+			}
+			
+			// Second pass: Add /Ff 1 to widgets that don't have it
+			// We insert after the /Subtype /Widget line
+			foreach ($widgets_to_add_ff as $widget_line) {
+				$old_line = $entries[$widget_line];
+				$new_line = $old_line . "\n/Ff 1";
+				$entries[$widget_line] = $new_line;
+				$this->shift += strlen($new_line) - strlen($old_line);
+				$modified_count++;
+				if($verbose_flatten) $this->dumpContent("Added /Ff 1 after line $widget_line", "Flatten");
+			}
+			
+			if($verbose_flatten) $this->dumpContent("Flatten complete. Modified $modified_count field(s) to read-only", "Flatten");
+		}
+		
+		/**
+		*Removes the AcroForm dictionary reference from the document catalog
+		*
+		*@access private
+		*@note This disables form functionality at the document level
+		**/
+		function removeAcroForm() {
+		//------------------------
+			$entries = &$this->pdf_entries;
+			$countLines = count($entries);
+			$verbose_flatten = ($this->verbose && ($this->verbose_level > 1));
+			
+			$in_catalog = false;
+			$acroform_removed = false;
+			
+			for ($i = 0; $i < $countLines; $i++) {
+				$line = $entries[$i];
+				
+				// Find the Catalog object
+				if (preg_match("/\/Type\s*\/Catalog/", $line)) {
+					$in_catalog = true;
+					if($verbose_flatten) $this->dumpContent("Found Catalog at line $i", "Flatten");
+				}
+				
+				// If in catalog, look for AcroForm reference
+				if ($in_catalog) {
+					// Match /AcroForm with object reference (e.g., /AcroForm 5 0 R)
+					if (preg_match("/\/AcroForm\s+\d+\s+\d+\s+R/", $line)) {
+						$old_len = strlen($line);
+						// Remove the AcroForm reference from this line
+						$new_line = preg_replace("/\/AcroForm\s+\d+\s+\d+\s+R\s*/", "", $line);
+						$entries[$i] = $new_line;
+						$this->shift += strlen($new_line) - $old_len;
+						$acroform_removed = true;
+						if($verbose_flatten) $this->dumpContent("Removed /AcroForm reference at line $i", "Flatten");
+					}
+					// Also handle inline AcroForm dictionary (less common)
+					if (preg_match("/^\/AcroForm\s*<</", $line)) {
+						$old_len = strlen($line);
+						$entries[$i] = '';
+						$this->shift -= $old_len;
+						$acroform_removed = true;
+						if($verbose_flatten) $this->dumpContent("Removed inline /AcroForm at line $i", "Flatten");
+					}
+					
+					// Also remove /NeedAppearances if present (cleanup)
+					if (preg_match("/\/NeedAppearances\s+(true|false)/", $line)) {
+						$old_len = strlen($line);
+						$new_line = preg_replace("/\/NeedAppearances\s+(true|false)\s*/", "", $line);
+						$entries[$i] = $new_line;
+						$this->shift += strlen($new_line) - $old_len;
+						if($verbose_flatten) $this->dumpContent("Removed /NeedAppearances at line $i", "Flatten");
+					}
+				}
+				
+				// Stop when we exit the catalog object
+				if ($in_catalog && preg_match("/^endobj/", $line)) {
+					$in_catalog = false;
+					if ($acroform_removed) break; // We're done
+				}
+			}
+			
+			if($verbose_flatten && !$acroform_removed) {
+				$this->dumpContent("Warning: /AcroForm reference not found in Catalog", "Flatten");
+			}
 		}
 		
 		/***
@@ -464,13 +617,12 @@ if (!class_exists('FPDM', false)) {
 		
 		//#############################
 		
-		/**
+	/**
 		*Merge FDF file with a PDF file
 		*
 		*@access public 
 		*@note files has been provided during the instantiation of this class
-		*@internal flatten mode is not yet supported
-		*@param Boolean flatten Optional, false by default, if true will use pdftk (requires a shell) to flatten the pdf form
+		*@param Boolean flatten Optional, false by default, if true will flatten the pdf form (now supported natively)
 		**/
 		function Merge($flatten=false) {
 		//------------------------------
@@ -490,7 +642,7 @@ if (!class_exists('FPDM', false)) {
 				
 				if($this->verbose&&($count_fields==0)) 
 					$this->dumpContent("The FDF content has either no field data or parsing may failed","FDF parser: ");
-						
+					
 				$fields_value_definition_lines=array();
 				
 				$count_entries=$this->parsePDFEntries($fields_value_definition_lines);
@@ -510,6 +662,12 @@ if (!class_exists('FPDM', false)) {
 //							$this->set_field_value("default",$name,$value);
 //							$this->set_field_value("tooltip",$name,$value);
 						}
+					}
+					//===========================================================
+					
+					//==== Native flatten: remove form field interactivity =====
+					if($this->flatten_mode) {
+						$this->flattenFields();
 					}
 					//===========================================================
 				
