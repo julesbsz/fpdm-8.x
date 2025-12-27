@@ -8,6 +8,7 @@ A PHP library for filling PDF forms by merging data into form fields.
 
 - Fill PDF text fields from PHP arrays or FDF files
 - Checkbox support with automatic state detection
+- Native form flattening (experimental) - make fields read-only without external tools
 - PHP 8.0+ compatible
 - No external dependencies (pure PHP)
 
@@ -65,6 +66,24 @@ $pdf->Output();
 
 Checkbox state names (e.g., `Yes`/`Off`, `Oui`/`Off`) are automatically detected during parsing.
 
+### Flatten (Experimental)
+
+Make form fields read-only after filling to prevent users from editing:
+
+```php
+<?php
+$pdf = new FPDM('form.pdf');
+$pdf->Load(['name' => 'John Doe']);
+$pdf->Flatten(); // Enable flatten mode
+$pdf->Merge();
+$pdf->Output('F', 'flattened.pdf');
+
+// Or use shorthand:
+$pdf->Merge(true); // true = flatten
+```
+
+> **⚠️ Experimental**: This feature sets the ReadOnly flag on all form fields. The form structure is preserved but fields cannot be edited. This is a native PHP implementation that doesn't require external tools like pdftk.
+
 ## Output Options
 
 ```php
@@ -91,6 +110,7 @@ This fork includes:
 
 - Full PHP 8.0 - 8.5 compatibility
 - Enhanced checkbox parser with support for indirect `/AP` references
+- Native form flattening (experimental) - sets ReadOnly flags without requiring pdftk
 - Replaced deprecated `create_function()` with closures
 - Fixed curly brace string access syntax
 - Fixed `implode()` parameter order
