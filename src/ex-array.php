@@ -15,6 +15,7 @@ $fields = array(
 
 $pdf = new FPDM('template.pdf');
 $pdf->Load($fields, false); // second parameter: false if field values are in ISO-8859-1, true if UTF-8
+$pdf->Flatten();
 $pdf->Merge();
-$pdf->Output();
+$pdf->Output('F', 'output.pdf');
 ?>
